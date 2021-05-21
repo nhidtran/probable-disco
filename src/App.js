@@ -8,7 +8,7 @@ const Box = () => (
       backgroundColor: "pink",
       margin: 10,
       border: "1px solid black",
-      boxSizing: "border-box"
+      boxSizing: "border-box",
     }}
   />
 );
@@ -42,6 +42,7 @@ export function useToggle({ decrement = 0, increment = 0, list = [] }) {
     // reduce list by decrement value
     if (offset === items.length) {
       setOffset(offset - decrement);
+      return;
     }
   };
 
@@ -54,17 +55,23 @@ export function useToggle({ decrement = 0, increment = 0, list = [] }) {
     originalList: list,
     // renderButton: items.length > increment,
     max: items.length || 0, // items rendered count
-    toggle
+    toggle,
   };
 }
 
 export const Toggle = ({ children, list, increment, decrement }) => {
-  const { items = [], max, offset, renderButton, toggle } = useToggle({
+  const {
+    items = [],
+    max,
+    offset,
+    renderButton,
+    toggle,
+  } = useToggle({
     list,
     decrement,
-    increment
+    increment,
   });
-  console.log("items:", items);
+
   return (
     <ToggleContext.Provider
       value={{ items, decrement, increment, max, offset, renderButton, toggle }}
@@ -74,68 +81,105 @@ export const Toggle = ({ children, list, increment, decrement }) => {
   );
 };
 
-const Button = ({ toggle = () => {} }) => {
-  return <button onClick={toggle}>Click me!</button>;
+const Button = ({ callback, toggle = () => {} }) => {
+  const [hoverRef, isHovered] = useHover();
+  React.useEffect(() => {
+    callback(isHovered);
+  }, [isHovered]);
+
+  return <button ref={hoverRef}>Click me!</button>;
 };
 
+// Hook
+function useHover() {
+  const [value, setValue] = React.useState(false);
+  console.log("value:", value);
+  const ref = React.useRef(null);
+  const handleMouseOver = () => setValue(true);
+  const handleMouseOut = () => setValue(false);
+  React.useEffect(
+    () => {
+      const node = ref.current;
+      if (node) {
+        node.addEventListener("mouseover", handleMouseOver);
+        node.addEventListener("mouseout", handleMouseOut);
+        return () => {
+          node.removeEventListener("mouseover", handleMouseOver);
+          node.removeEventListener("mouseout", handleMouseOut);
+        };
+      }
+    },
+    [ref.current] // Recall only if ref changes
+  );
+  return [ref, value];
+}
+
 export default function App() {
-  const list = [1, 2, 3, 4, 5, 6];
   const listRef = React.useRef(null);
   const itemRef = React.useRef(null);
 
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isExpanded, setIsExpanding] = React.useState(false);
+  const [opacity, setOpacity] = React.useState(0);
 
-  React.useLayoutEffect(() => {
-    console.log("listRef offsetWidth:", listRef?.current.offsetWidth);
-    console.log("listRef offsetHeight:", listRef?.current.offsetHeight);
-    console.log("itemsRef", itemRef?.current?.offsetHeight);
-  }, [listRef]);
-
-  console.log("llisth", listRef?.current?.offsetHeight);
   return (
     <div className="App">
       <Toggle list={[1, 2, 3, 4, 5, 6]} increment={3} decrement={3}>
         <ToggleContext.Consumer>
           {({ items = [], offset, originalList, toggle }) => {
-            const onClick = () => {
-              if (offset >= items.length) {
-                setIsOpen(true);
+            function onHover(isHovered) {
+              if (isHovered && offset >= items.length) {
                 toggle();
-              } else {
-                setIsOpen(false);
-                toggle();
+                setIsExpanding(true);
+                setTimeout(() => {
+                  setOpacity(1);
+                }, 1000);
               }
-            };
+              if (isHovered && offset < items.length) {
+                toggle();
+                setIsExpanding(false);
+                setTimeout(() => {
+                  setOpacity(0);
+                }, 1000);
+              }
+            }
 
             return (
-              <>
+              <div className="collections">
                 <ul
+                  className="list"
                   ref={listRef}
                   style={{
                     display: "flex",
                     flexDirection: "row",
                     flexWrap: "wrap",
                     listStyle: "none",
-                    maxHeight: !isOpen
-                      ? itemRef?.current?.offsetHeight
-                      : itemRef?.current?.offsetHeight * 2,
+                    maxHeight: !isExpanded ? 220 : 440,
                     border: "1px solid blue",
-                    transition: isOpen
-                      ? "max-height 1s ease-in"
-                      : "max-height 5s ease-out",
-                    overflow: "hidden"
+                    transition: isExpanded
+                      ? "max-height 1000ms ease-in"
+                      : "max-height 1000ms ease-out",
                   }}
                 >
                   {items.map((item, idx) => {
                     return (
-                      <li ref={itemRef} style={{ flexBasis: "33%" }}>
+                      <li
+                        ref={itemRef}
+                        style={{
+                          flexBasis: "33%",
+                          transition: `opacity 100ms ease-out`,
+                          opacity:
+                            (offset > 3 && idx < 3) || idx < 3 ? 1 : opacity,
+                          border:
+                            (offset > 3 && idx < 3) || idx < 3 ? null : "blue",
+                        }}
+                      >
                         <Box />
                       </li>
                     );
                   })}
                 </ul>
-                <Button toggle={onClick} />
-              </>
+                <Button callback={onHover} />
+              </div>
             );
           }}
         </ToggleContext.Consumer>
